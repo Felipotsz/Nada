@@ -40,15 +40,12 @@ let _mouseAxisY = 0;
 let _gamepadAnyButtonPressed = false;
 let _gamepadAnyAxisMoved = false;
 
-// --- NOVO: Variáveis para controlar os listeners de input ---
-let inputListenersActive = true; // Controla se os listeners estão ativos
-
 // Propriedade computada 'didSomething'
 function getDidSomething() {
-    // Se os listeners não estão ativos ou ainda estamos no período de imunidade total,
-    // não houve detecção de "algo" neste momento.
-    if (!inputListenersActive || performance.now() < immunityEndTime) {
-        return false; // Força "nada" durante a imunidade e desativação de listeners
+    // Se ainda estamos no período de imunidade, retorne false imediatamente.
+    // Isto é a "última linha de defesa" para ignorar qualquer input.
+    if (performance.now() < immunityEndTime) {
+        return false;
     }
 
     const noInputExceptPossibleMouseY =
@@ -79,90 +76,51 @@ function clearAllInputStates() {
     _gamepadAnyAxisMoved = false;
 }
 
-// --- NOVO: Funções para ativar/desativar listeners de input ---
-function addInputListeners() {
-    if (!inputListenersActive) {
-        document.addEventListener('keydown', handleKeyDown);
-        document.addEventListener('mousedown', handleMouseDown);
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('touchstart', handleTouchStart, { passive: true }); // Mudar para false se precisar de preventDefault
-        document.addEventListener('touchend', handleTouchEnd);
-        document.addEventListener('touchcancel', handleTouchCancel);
-        if (window.DeviceMotionEvent) {
-            window.addEventListener('devicemotion', handleDeviceMotion);
-        }
-        inputListenersActive = true;
-        console.log("Input Listeners ATIVADOS.");
-    }
-}
-
-function removeInputListeners() {
-    if (inputListenersActive) {
-        document.removeEventListener('keydown', handleKeyDown);
-        document.removeEventListener('mousedown', handleMouseDown);
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('touchstart', handleTouchStart, { passive: true }); // Usar o mesmo 'passive' que no add
-        document.removeEventListener('touchend', handleTouchEnd);
-        document.removeEventListener('touchcancel', handleTouchCancel);
-        if (window.DeviceMotionEvent) {
-            window.removeEventListener('devicemotion', handleDeviceMotion);
-        }
-        inputListenersActive = false;
-        console.log("Input Listeners DESATIVADOS.");
-    }
-}
-
-// --- Handlers de Eventos Separados ---
-const handleKeyDown = (e) => {
+// --- Event Listeners para capturar input do usuário ---
+// Os listeners são adicionados apenas uma vez no DOMContentLoaded
+document.addEventListener('keydown', (e) => {
     _anyKeyDown = true;
     if (e.key === 'Escape') {
         alert("Você pressionou Escape! Em um navegador, não é possível sair da aplicação diretamente.");
         console.log("Escape pressionado.");
     }
-};
+});
 
-const handleMouseDown = (e) => {
+document.addEventListener('mousedown', (e) => {
     if (e.button === 0) {
         _mouseButtonDown0 = true;
     }
-};
+});
 
-const handleMouseMove = (e) => {
+document.addEventListener('mousemove', (e) => {
     _mouseAxisX = e.movementX;
     _mouseAxisY = e.movementY;
-};
+});
 
-const handleTouchStart = (e) => {
+document.addEventListener('touchstart', (e) => {
     _touchCount = e.touches.length;
     // e.preventDefault(); // Descomente se precisar impedir rolagem/zoom ao tocar
-};
+}, { passive: true });
 
-const handleTouchEnd = (e) => {
+document.addEventListener('touchend', (e) => {
     _touchCount = e.touches.length;
-};
-
-const handleTouchCancel = (e) => {
+});
+document.addEventListener('touchcancel', (e) => {
     _touchCount = e.touches.length;
-};
+});
 
-const handleDeviceMotion = (e) => {
-    if (e.accelerationIncludingGravity) {
-        _acceleration.x = e.accelerationIncludingGravity.x;
-        _acceleration.y = e.accelerationIncludingGravity.y;
-        _acceleration.z = e.accelerationIncludingGravity.z;
-    }
-};
-
+if (window.DeviceMotionEvent) {
+    window.addEventListener('devicemotion', (e) => {
+        if (e.accelerationIncludingGravity) {
+            _acceleration.x = e.accelerationIncludingGravity.x;
+            _acceleration.y = e.accelerationIncludingGravity.y;
+            _acceleration.z = e.accelerationIncludingGravity.z;
+        }
+    });
+}
 
 // Lógica de Gamepad
 function checkGamepads() {
-    // Só verifica gamepads se os listeners de input estão ativos
-    if (!inputListenersActive) {
-        _gamepadAnyButtonPressed = false;
-        _gamepadAnyAxisMoved = false;
-        return;
-    }
-
     const gamepads = navigator.getGamepads();
     _gamepadAnyButtonPressed = false;
     _gamepadAnyAxisMoved = false;
@@ -247,7 +205,7 @@ function reiniciarJogo() {
     tempoUltimoFrame = performance.now();
     immunityEndTime = 0; // Garante que a imunidade não esteja ativa
     clearAllInputStates();
-    addInputListeners(); // Certifica que os listeners estão ativos para iniciar o jogo
+    // NÃO chamamos mais addInputListeners aqui, pois eles são persistentes
 }
 
 function atualizar() {
@@ -263,22 +221,16 @@ function atualizar() {
                 estadoAtual = EstadosDoJogo.EmProgresso;
                 tempoUltimaMudancaEstado = tempoAtual;
                 immunityEndTime = tempoAtual + initialImmunityPeriod;
-                clearAllInputStates(); // Limpa inputs imediatamente
-                // Não remove os listeners aqui, eles são necessários para o jogo
-                // o 'getDidSomething' cuida da imunidade.
+                clearAllInputStates(); // Limpa TODOS os inputs imediatamente após a transição
             }
             break;
 
         case EstadosDoJogo.EmProgresso:
-            // DEBUG: Adicione logs para ver o estado da imunidade e do input
-            // console.log(`Tempo: ${tempoAtual.toFixed(0)}, Imunidade termina em: ${immunityEndTime.toFixed(0)}, Imunidade ativa: ${tempoAtual < immunityEndTime}`);
-            // console.log(`_acceleration: ${JSON.stringify(_acceleration)}, _touchCount: ${_touchCount}`);
-
             elementoTimer.innerHTML = `Você está fazendo ${textoNada} há\n${formatarTempo(tempoInatividade)}\n`;
             tempoInatividade += deltaTime;
 
             // A condição de perda agora usa immunityEndTime diretamente no getDidSomething()
-            if (getDidSomething()) { // getDidSomething() já verifica immunityEndTime e inputListenersActive
+            if (getDidSomething()) { // getDidSomething() já verifica immunityEndTime
                 atualizarScores();
                 tempoUltimaMudancaEstado = tempoAtual;
                 estadoAtual = EstadosDoJogo.FimDeJogo;
@@ -304,6 +256,8 @@ function atualizar() {
     _mouseAxisX = 0;
     _mouseAxisY = 0;
     // _touchCount, _acceleration, _gamepadAny... são tratados por seus listeners ou checkGamepads().
+    // E, crucialmente, o getDidSomething() agora é a "porta" final para detectar o "algo"
+    // respeitando o immunityEndTime.
 }
 
 // --- Loop Principal do Jogo ---
@@ -316,7 +270,7 @@ function gameLoop() {
 document.addEventListener('DOMContentLoaded', () => {
     if (elementoTimer) {
         carregarScores();
-        reiniciarJogo(); // Isso já chama addInputListeners()
+        reiniciarJogo();
         requestAnimationFrame(gameLoop);
     } else {
         console.error("Elemento com ID 'timerText' não encontrado no HTML. O jogo não pode iniciar.");
