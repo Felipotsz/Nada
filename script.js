@@ -14,7 +14,7 @@ let tempoUltimaMudancaEstado = 0; // Marcação de tempo da última mudança de 
 let tempoUltimoFrame = performance.now(); // Para calcular o deltaTime
 
 // Tempo de imunidade total a inputs após o início (em milissegundos)
-const initialImmunityPeriod = 2000; // 2 segundos de imunidade ao iniciar
+const initialImmunityPeriod = 2500; // AUMENTADO PARA 2.5 SEGUNDOS
 let immunityEndTime = 0;
 
 // NOVAS VARIÁVEIS DE SCORE
@@ -40,9 +40,9 @@ let _mouseAxisY = 0;
 let _gamepadAnyButtonPressed = false;
 let _gamepadAnyAxisMoved = false;
 
-// --- NOVOS LIMIARES DE TOLERÂNCIA ---
-const ACCELERATION_THRESHOLD = 0.2; // Limiar para o acelerômetro (ajustável)
-const MOUSE_AXIS_THRESHOLD = 0.5;   // Limiar para movimento do mouse/touch emulado (ajustável)
+// --- NOVOS LIMIARES DE TOLERÂNCIA (MAIS ALTOS PARA TESTE) ---
+const ACCELERATION_THRESHOLD = 0.5; // AUMENTADO SIGNIFICATIVAMENTE! (ex: 0.5 a 1.0 para teste)
+const MOUSE_AXIS_THRESHOLD = 1.0;   // AUMENTADO PARA IGNORAR MOVIMENTOS PEQUENOS
 
 // Propriedade computada 'didSomething'
 function getDidSomething() {
@@ -52,22 +52,28 @@ function getDidSomething() {
     }
 
     // --- Lógica de detecção de "algo" com limiares ---
-    // Verifica teclado, clique do mouse, toques e botões de gamepad (ações discretas)
-    if (_anyKeyDown || _mouseButtonDown0 || _touchCount > 0 || _gamepadAnyButtonPressed) {
-        return true;
-    }
 
-    // Verifica movimentos contínuos com limiares
-    // Aceleração: verifica se o movimento é significativo
+    // ** DEBUG - Remova ou comente as linhas abaixo para isolar o acelerômetro **
+    // if (_anyKeyDown || _mouseButtonDown0 || _touchCount > 0 || _gamepadAnyButtonPressed) {
+    //     console.log("DEBUG: Perdeu por key/mouse/touch/gamepad button");
+    //     return true;
+    // }
+    // if (Math.abs(_mouseAxisX) > MOUSE_AXIS_THRESHOLD ||
+    //     Math.abs(_mouseAxisY) > MOUSE_AXIS_THRESHOLD) {
+    //     console.log("DEBUG: Perdeu por mouse/touch axis. X:", _mouseAxisX.toFixed(2), "Y:", _mouseAxisY.toFixed(2));
+    //     return true;
+    // }
+    // if (_gamepadAnyAxisMoved) {
+    //     console.log("DEBUG: Perdeu por gamepad axis");
+    //     return true;
+    // }
+    // ** FIM DEBUG **
+
+    // Aceleração: verifica se o movimento é significativo (MAIS FOCO AQUI!)
     if (Math.abs(_acceleration.x) > ACCELERATION_THRESHOLD ||
         Math.abs(_acceleration.y) > ACCELERATION_THRESHOLD ||
         Math.abs(_acceleration.z) > ACCELERATION_THRESHOLD) {
-        return true;
-    }
-
-    // Movimento do mouse/touch emulado: verifica se o movimento é significativo
-    if (Math.abs(_mouseAxisX) > MOUSE_AXIS_THRESHOLD ||
-        Math.abs(_mouseAxisY) > MOUSE_AXIS_THRESHOLD) {
+        console.log(`DEBUG: Perdeu por ACELERAÇÃO! X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`);
         return true;
     }
 
@@ -90,15 +96,14 @@ function clearAllInputStates() {
 }
 
 // --- Event Listeners Globais e Permanentes ---
-document.addEventListener('keydown', (e) => { _anyKeyDown = true; if (e.key === 'Escape') { console.log("Escape pressionado."); } });
+document.addEventListener('keydown', (e) => { _anyKeyDown = true; /* if (e.key === 'Escape') { console.log("Escape pressionado."); } */ });
 document.addEventListener('mousedown', (e) => { if (e.button === 0) { _mouseButtonDown0 = true; } });
 document.addEventListener('mousemove', (e) => { _mouseAxisX = e.movementX; _mouseAxisY = e.movementY; });
 
-// IMPORTANTE: Mantenha { passive: false } se precisar de e.preventDefault()
 document.addEventListener('touchstart', (e) => {
     _touchCount = e.touches.length;
     // e.preventDefault(); // Descomente para impedir rolagem/zoom ao tocar
-}, { passive: false }); // Use { passive: true } se você realmente não precisar de preventDefault()
+}, { passive: false });
 
 document.addEventListener('touchend', (e) => { _touchCount = e.touches.length; });
 document.addEventListener('touchcancel', (e) => { _touchCount = e.touches.length; });
@@ -106,15 +111,16 @@ document.addEventListener('touchcancel', (e) => { _touchCount = e.touches.length
 if (window.DeviceMotionEvent) {
     window.addEventListener('devicemotion', (e) => {
         if (e.accelerationIncludingGravity) {
-            // console.log(`ACCEL: X:${e.accelerationIncludingGravity.x.toFixed(2)}, Y:${e.accelerationIncludingGravity.y.toFixed(2)}, Z:${e.accelerationIncludingGravity.z.toFixed(2)}`); // DEBUG
             _acceleration.x = e.accelerationIncludingGravity.x;
             _acceleration.y = e.accelerationIncludingGravity.y;
             _acceleration.z = e.accelerationIncludingGravity.z;
+            // Descomente esta linha para VER O INPUT DO ACELERÔMETRO EM TEMPO REAL
+            // console.log(`LIVE ACCEL: X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`);
         }
     });
 }
 
-// Lógica de Gamepad (sem alterações, mas checkGamepads() foi removido de getDidSomething e tratado em atualizar)
+// Lógica de Gamepad
 function checkGamepads() {
     const gamepads = navigator.getGamepads();
     _gamepadAnyButtonPressed = false;
@@ -225,12 +231,6 @@ function atualizar() {
             elementoTimer.innerHTML = `Você está fazendo ${textoNada} há\n${formatarTempo(tempoInatividade)}\n`;
             tempoInatividade += deltaTime;
 
-            // Debug do acelerômetro APENAS durante o jogo em progresso e após a imunidade
-            if (performance.now() >= immunityEndTime && window.DeviceMotionEvent) {
-                // console.log(`DEBUG ACCEL: X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`);
-                // console.log(`DEBUG MOUSE: X:${_mouseAxisX.toFixed(2)}, Y:${_mouseAxisY.toFixed(2)}`);
-            }
-
             if (getDidSomething()) { // getDidSomething() já verifica immunityEndTime
                 atualizarScores();
                 tempoUltimaMudancaEstado = tempoAtual;
@@ -256,13 +256,10 @@ function atualizar() {
     }
 
     // Resetamos as flags de input de eventos DISCRETOS no final do frame.
-    // _anyKeyDown, _mouseButtonDown0, _mouseAxisX, _mouseAxisY
     _anyKeyDown = false;
     _mouseButtonDown0 = false;
     _mouseAxisX = 0;
     _mouseAxisY = 0;
-    // _touchCount, _acceleration, _gamepadAny... são tratados por seus listeners ou checkGamepads()
-    // e devem ser zerados por clearAllInputStates() na transição, não aqui.
 }
 
 // --- Loop Principal do Jogo ---
