@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>O Jogo do Nada</title>
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            font-family: 'Consolas', 'Monospace', sans-serif;
+            text-align: center;
+            padding-top: 10vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #timerText {
+            font-size: 2.5em; /* Tamanho base para telas maiores (desktops) */
+            white-space: pre-wrap;
+            line-height: 1.5;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+            padding: 10px; /* Adiciona um pouco de padding para não colar nas bordas */
+            max-width: 90%; /* Garante que o texto não exceda a largura da tela */
+            box-sizing: border-box; /* Inclui padding na largura total */
+        }
+        .instructions {
+            font-size: 0.9em;
+            margin-top: 20px;
+            color: #aaa;
+            padding: 0 20px; /* Adiciona padding para instruções também */
+            max-width: 90%;
+            box-sizing: border-box;
+        }
+
+        /* --- NOVAS REGRAS @MEDIA PARA MOBILE --- */
+
+        /* Para telas com largura máxima de 768px (geralmente tablets em retrato e a maioria dos celulares) */
+        @media (max-width: 768px) {
+            body {
+                padding-top: 5vh; /* Menos padding no topo para mobile */
+            }
+            #timerText {
+                font-size: 1.8em; /* Reduz o tamanho da fonte para telas menores */
+            }
+            .instructions {
+                font-size: 0.8em; /* Reduz o tamanho da fonte das instruções */
+                margin-top: 15px;
+            }
+        }
+
+        /* Para telas com largura máxima de 480px (celulares pequenos ou muito antigos) */
+        @media (max-width: 480px) {
+            #timerText {
+                font-size: 1.5em; /* Reduz ainda mais para telas muito pequenas */
+            }
+            .instructions {
+                font-size: 0.75em;
+            }
+        }
+
+        /* Regras adicionais para orientação paisagem em mobile (se necessário) */
+        @media (orientation: landscape) and (max-height: 480px) {
+            #timerText {
+                font-size: 1.3em; /* Ajuste para paisagem em telas muito baixas */
+            }
+            .instructions {
+                font-size: 0.7em;
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <div id="timerText"></div>
+    <div class="instructions">
+        Pressione <kbd>Esc</kbd> no teclado para ver uma mensagem de sistema.
+        <br>
+        (Este jogo não tem um botão de saída tradicional no navegador.)
+        <br><br>
+        Tente não mover o mouse, não clicar, não tocar e não usar o controle!
+    </div>
+
+    <script src="script.js" defer></script>
+</body>
+</html>
