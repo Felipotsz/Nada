@@ -14,7 +14,7 @@ let tempoUltimaMudancaEstado = 0; // Marcação de tempo da última mudança de 
 let tempoUltimoFrame = performance.now(); // Para calcular o deltaTime
 
 // Tempo de imunidade total a inputs após o início (em milissegundos)
-const initialImmunityPeriod = 2500; // Mantido em 2.5 segundos
+const initialImmunityPeriod = 3000; // AUMENTADO PARA 3 SEGUNDOS para maior segurança!
 let immunityEndTime = 0;
 
 // NOVAS VARIÁVEIS DE SCORE
@@ -30,18 +30,29 @@ const textoAlgo = "<span style='color:#000000;'>Algo</span>";
 // Referência ao elemento HTML onde o timer será exibido
 const elementoTimer = document.getElementById('timerText');
 
-// --- Variáveis de Estado do Input (Sem Gamepad) ---
+// --- Variáveis de Estado do Input ---
 let _anyKeyDown = false;
 let _mouseButtonDown0 = false;
 let _touchCount = 0;
 let _acceleration = { x: 0, y: 0, z: 0 };
 let _mouseAxisX = 0;
 let _mouseAxisY = 0;
-// _gamepadAnyButtonPressed e _gamepadAnyAxisMoved REMOVIDOS
 
-// --- Limiares de Tolerância ---
-const ACCELERATION_THRESHOLD = 0.5; // Limiar para o acelerômetro
-const MOUSE_AXIS_THRESHOLD = 1.0;   // Limiar para movimento do mouse/touch emulado
+// --- CONFIGURAÇÕES DE SENSIBILIDADE E COMPATIBILIDADE MOBILE ---
+// Limiar padrão para o acelerômetro. Se o seu dispositivo tiver muito ruído, AUMENTE ESTE VALOR.
+let ACCELERATION_THRESHOLD = 0.8; // Valor padrão elevado para 0.8 (m/s^2)
+
+// Limiar para movimento do mouse/touch emulado.
+const MOUSE_AXIS_THRESHOLD = 1.5;   // AUMENTADO para 1.5 pixels/unidades
+
+// ATENÇÃO: Se o problema persistir APÓS TESTAR DIVERSOS VALORES PARA ACCELERATION_THRESHOLD,
+// defina esta flag como 'true' APENAS PARA O MOBILE.
+// Isso DESATIVA COMPLETAMENTE a detecção do acelerômetro.
+const DISABLE_ACCELEROMETER_ON_MOBILE = false; // Mude para 'true' se for um último recurso
+
+// Verifica se o dispositivo é mobile (simplificado, pode não ser 100% preciso, mas funciona na maioria)
+const isMobileDevice = /Mobi|Android/i.test(navigator.userAgent);
+
 
 // Propriedade computada 'didSomething'
 function getDidSomething() {
@@ -50,7 +61,7 @@ function getDidSomething() {
         return false;
     }
 
-    // --- Lógica de detecção de "algo" com limiares (SEM GAMEPAD) ---
+    // --- Lógica de detecção de "algo" com limiares ---
 
     // Teclado, clique do mouse, toques (ações discretas)
     if (_anyKeyDown || _mouseButtonDown0 || _touchCount > 0) {
@@ -58,13 +69,16 @@ function getDidSomething() {
         return true;
     }
 
-    // Aceleração: verifica se o movimento é significativo
-    if (Math.abs(_acceleration.x) > ACCELERATION_THRESHOLD ||
-        Math.abs(_acceleration.y) > ACCELERATION_THRESHOLD ||
-        Math.abs(_acceleration.z) > ACCELERATION_THRESHOLD) {
-        // console.log(`DEBUG: Perdeu por ACELERAÇÃO! X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`); // DEBUG
-        return true;
+    // Aceleração: verifica se o movimento é significativo, respeitando a flag de desativação
+    if (!DISABLE_ACCELEROMETER_ON_MOBILE || !isMobileDevice) { // Só verifica aceleração se não for desativada no mobile
+        if (Math.abs(_acceleration.x) > ACCELERATION_THRESHOLD ||
+            Math.abs(_acceleration.y) > ACCELERATION_THRESHOLD ||
+            Math.abs(_acceleration.z) > ACCELERATION_THRESHOLD) {
+            // console.log(`DEBUG: Perdeu por ACELERAÇÃO! X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`); // DEBUG
+            return true;
+        }
     }
+
 
     // Movimento do mouse/touch emulado: verifica se o movimento é significativo
     if (Math.abs(_mouseAxisX) > MOUSE_AXIS_THRESHOLD ||
@@ -87,7 +101,6 @@ function clearAllInputStates() {
     _mouseAxisY = 0;
     _touchCount = 0;
     _acceleration = { x: 0, y: 0, z: 0 }; // Garante que a aceleração seja zerada na transição
-    // _gamepadAnyButtonPressed e _gamepadAnyAxisMoved REMOVIDOS
 }
 
 // --- Event Listeners Globais e Permanentes ---
@@ -109,12 +122,11 @@ if (window.DeviceMotionEvent) {
             _acceleration.x = e.accelerationIncludingGravity.x;
             _acceleration.y = e.accelerationIncludingGravity.y;
             _acceleration.z = e.accelerationIncludingGravity.z;
-            // console.log(`LIVE ACCEL: X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`); // DESCOMENTE PARA DEPURAR ACELERÔMETRO
+            // Descomente para DEPURAR O VALOR DO ACELERÔMETRO EM TEMPO REAL
+            // console.log(`LIVE ACCEL: X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`);
         }
     });
 }
-
-// Lógica de Gamepad REMOVIDA - a função checkGamepads() não existe mais
 
 
 // --- Funções de Lógica do Jogo ---
@@ -180,12 +192,10 @@ function atualizar() {
     const deltaTime = tempoAtual - tempoUltimoFrame;
     tempoUltimoFrame = tempoAtual;
 
-    // checkGamepads(); REMOVIDO
-
     switch (estadoAtual) {
         case EstadosDoJogo.NaoIniciado:
-            // O jogo inicia se QUALQUER input for detectado (AGORA SEM GAMEPAD)
-            if (_anyKeyDown || _mouseButtonDown0 || _touchCount > 0) { // _gamepadAnyButtonPressed e _gamepadAnyAxisMoved REMOVIDOS
+            // O jogo inicia se QUALQUER input for detectado (teclado, mouse, touch)
+            if (_anyKeyDown || _mouseButtonDown0 || _touchCount > 0) {
                 estadoAtual = EstadosDoJogo.EmProgresso;
                 tempoUltimaMudancaEstado = tempoAtual;
                 immunityEndTime = tempoAtual + initialImmunityPeriod;
@@ -213,9 +223,9 @@ function atualizar() {
                 `Recorde: ${formatarTempo(recordeTempo)}\n\n` +
                 `Pressione qualquer tecla ou toque na tela para reiniciar`;
 
-            // Permite reiniciar após 1 segundo de "Game Over" (AGORA SEM GAMEPAD)
+            // Permite reiniciar após 1 segundo de "Game Over"
             if (tempoAtual - tempoUltimaMudancaEstado >= 1000 &&
-               (_anyKeyDown || _mouseButtonDown0 || _touchCount > 0)) { // _gamepadAnyButtonPressed e _gamepadAnyAxisMoved REMOVIDOS
+               (_anyKeyDown || _mouseButtonDown0 || _touchCount > 0)) {
                 reiniciarJogo();
                 console.log("Jogo REINICIADO.");
             }
