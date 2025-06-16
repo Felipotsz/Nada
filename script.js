@@ -35,18 +35,20 @@ let _anyKeyDown = false;
 let _mouseButtonDown0 = false;
 let _touchCount = 0;
 let _acceleration = { x: 0, y: 0, z: 0 };
-let _mouseAxisX = 0;
-let _mouseAxisY = 0;
+let _mouseAxisX = 0; // Agora usado para armazenar o movimento temporariamente
+let _mouseAxisY = 0; // Agora usado para armazenar o movimento temporariamente
+// Adicionamos flags para indicar se houve movimento do mouse no frame atual
+let _mouseMovedThisFrame = false;
+
 
 // --- CONFIGURAÇÕES DE SENSIBILIDADE E COMPATIBILIDADE MOBILE ---
 // Limiar padrão para o acelerômetro (não será usado na detecção principal de "algo" no mobile)
 let ACCELERATION_THRESHOLD = 0.8;
 
 // Limiar para movimento do mouse. Este valor é para Desktop.
-const MOUSE_AXIS_THRESHOLD = 1.5;
+const MOUSE_AXIS_THRESHOLD = 0.5;   // Diminuído para 0.5 para maior sensibilidade
 
 // Esta flag controla se o acelerômetro E O MOVIMENTO DO MOUSE/TOUCH serão considerados inputs NO MOBILE.
-// Mantenha TRUE para mobile se o dispositivo for muito ruidoso e você não quiser que o movimento o faça perder.
 const DISABLE_ACCELEROMETER_AND_MOUSE_AXIS_ON_MOBILE = true; // Mantenha TRUE para o mobile
 
 const isMobileDevice = /Mobi|Android/i.test(navigator.userAgent);
@@ -62,28 +64,25 @@ function getDidSomething() {
     // --- Lógica de detecção de "algo" ---
 
     // 1. Teclado, clique do mouse, toques (ações discretas)
-    // Estes são os inputs básicos que devem causar a perda.
     if (_anyKeyDown) {
-        console.log("DEBUG: Perdeu por tecla pressionada.");
+        // console.log("DEBUG: Perdeu por tecla pressionada.");
         return true;
     }
     if (_mouseButtonDown0) {
-        console.log("DEBUG: Perdeu por clique do mouse.");
+        // console.log("DEBUG: Perdeu por clique do mouse.");
         return true;
     }
     // Detector de toque: Se há 1 ou mais toques ativos, o usuário está "fazendo algo".
     if (_touchCount > 0) {
-        console.log("DEBUG: Perdeu por toque na tela (touchCount > 0).");
+        // console.log("DEBUG: Perdeu por toque na tela (touchCount > 0).");
         return true;
     }
 
     // 2. Movimento do Mouse (APENAS PARA DESKTOP) e Acelerômetro (CONDICIONAL)
-    // Se não for um dispositivo mobile OU se a detecção desses inputs NÃO ESTIVER DESATIVADA globalmente.
     if (!isMobileDevice || !DISABLE_ACCELEROMETER_AND_MOUSE_AXIS_ON_MOBILE) {
-        // Movimento do mouse (para desktop)
-        if (Math.abs(_mouseAxisX) > MOUSE_AXIS_THRESHOLD ||
-            Math.abs(_mouseAxisY) > MOUSE_AXIS_THRESHOLD) {
-            console.log("DEBUG: Perdeu por mouse axis. X:", _mouseAxisX.toFixed(2), "Y:", _mouseAxisY.toFixed(2));
+        // Movimento do mouse (para desktop): usa a nova flag _mouseMovedThisFrame
+        if (_mouseMovedThisFrame) {
+            // console.log("DEBUG: Perdeu por mouse moved this frame.");
             return true;
         }
 
@@ -91,14 +90,10 @@ function getDidSomething() {
         if (Math.abs(_acceleration.x) > ACCELERATION_THRESHOLD ||
             Math.abs(_acceleration.y) > ACCELERATION_THRESHOLD ||
             Math.abs(_acceleration.z) > ACCELERATION_THRESHOLD) {
-            console.log(`DEBUG: Perdeu por ACELERAÇÃO! X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`);
+            // console.log(`DEBUG: Perdeu por ACELERAÇÃO! X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`);
             return true;
         }
-    } else {
-        // Se a flag estiver ativada E o dispositivo for mobile, ignore esses inputs
-        // console.log("DEBUG: Acelerômetro e Mouse Axis ignorados no mobile.");
     }
-
 
     // Se nada acima foi detectado, o jogador está fazendo "nada"
     return false;
@@ -110,8 +105,9 @@ function getDidSomething() {
 function clearAllInputStates() {
     _anyKeyDown = false;
     _mouseButtonDown0 = false;
-    _mouseAxisX = 0;
-    _mouseAxisY = 0;
+    _mouseAxisX = 0; // Limpamos os valores de movimento
+    _mouseAxisY = 0; // Limpamos os valores de movimento
+    _mouseMovedThisFrame = false; // Também limpamos a flag
     _touchCount = 0;
     _acceleration = { x: 0, y: 0, z: 0 };
 }
@@ -119,11 +115,19 @@ function clearAllInputStates() {
 // --- Event Listeners Globais e Permanentes ---
 document.addEventListener('keydown', (e) => { _anyKeyDown = true; });
 document.addEventListener('mousedown', (e) => { if (e.button === 0) { _mouseButtonDown0 = true; } });
-document.addEventListener('mousemove', (e) => { _mouseAxisX = e.movementX; _mouseAxisY = e.movementY; });
+document.addEventListener('mousemove', (e) => {
+    // Definimos _mouseMovedThisFrame como true se houver qualquer movimento acima do limiar
+    if (Math.abs(e.movementX) > MOUSE_AXIS_THRESHOLD || Math.abs(e.movementY) > MOUSE_AXIS_THRESHOLD) {
+        _mouseMovedThisFrame = true;
+    }
+    // Ainda armazenamos os valores brutos se precisar para outro debug, mas a detecção usa a flag
+    _mouseAxisX = e.movementX;
+    _mouseAxisY = e.movementY;
+});
 
 document.addEventListener('touchstart', (e) => {
     _touchCount = e.touches.length;
-    // e.preventDefault(); // Descomente para impedir rolagem/zoom ao tocar, se necessário.
+    // e.preventDefault();
 }, { passive: false });
 
 document.addEventListener('touchend', (e) => { _touchCount = e.touches.length; });
@@ -247,8 +251,8 @@ function atualizar() {
     // Resetamos as flags de input de eventos DISCRETOS no final do frame.
     _anyKeyDown = false;
     _mouseButtonDown0 = false;
-    _mouseAxisX = 0;
-    _mouseAxisY = 0;
+    // _mouseAxisX e _mouseAxisY não são zerados aqui, mas sim a flag _mouseMovedThisFrame
+    _mouseMovedThisFrame = false; // IMPORTANTE: Zeramos a flag aqui!
 }
 
 // --- Loop Principal do Jogo ---
