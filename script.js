@@ -14,7 +14,7 @@ let tempoUltimaMudancaEstado = 0; // Marcação de tempo da última mudança de 
 let tempoUltimoFrame = performance.now(); // Para calcular o deltaTime
 
 // Tempo de imunidade total a inputs após o início (em milissegundos)
-const initialImmunityPeriod = 2500; // AUMENTADO PARA 2.5 SEGUNDOS
+const initialImmunityPeriod = 2500; // Mantido em 2.5 segundos
 let immunityEndTime = 0;
 
 // NOVAS VARIÁVEIS DE SCORE
@@ -30,19 +30,18 @@ const textoAlgo = "<span style='color:#000000;'>Algo</span>";
 // Referência ao elemento HTML onde o timer será exibido
 const elementoTimer = document.getElementById('timerText');
 
-// --- Variáveis de Estado do Input (Replicando o Input do Unity) ---
+// --- Variáveis de Estado do Input (Sem Gamepad) ---
 let _anyKeyDown = false;
 let _mouseButtonDown0 = false;
 let _touchCount = 0;
 let _acceleration = { x: 0, y: 0, z: 0 };
 let _mouseAxisX = 0;
 let _mouseAxisY = 0;
-let _gamepadAnyButtonPressed = false;
-let _gamepadAnyAxisMoved = false;
+// _gamepadAnyButtonPressed e _gamepadAnyAxisMoved REMOVIDOS
 
-// --- NOVOS LIMIARES DE TOLERÂNCIA (MAIS ALTOS PARA TESTE) ---
-const ACCELERATION_THRESHOLD = 0.5; // AUMENTADO SIGNIFICATIVAMENTE! (ex: 0.5 a 1.0 para teste)
-const MOUSE_AXIS_THRESHOLD = 1.0;   // AUMENTADO PARA IGNORAR MOVIMENTOS PEQUENOS
+// --- Limiares de Tolerância ---
+const ACCELERATION_THRESHOLD = 0.5; // Limiar para o acelerômetro
+const MOUSE_AXIS_THRESHOLD = 1.0;   // Limiar para movimento do mouse/touch emulado
 
 // Propriedade computada 'didSomething'
 function getDidSomething() {
@@ -51,29 +50,26 @@ function getDidSomething() {
         return false;
     }
 
-    // --- Lógica de detecção de "algo" com limiares ---
+    // --- Lógica de detecção de "algo" com limiares (SEM GAMEPAD) ---
 
-    // ** DEBUG - Remova ou comente as linhas abaixo para isolar o acelerômetro **
-    // if (_anyKeyDown || _mouseButtonDown0 || _touchCount > 0 || _gamepadAnyButtonPressed) {
-    //     console.log("DEBUG: Perdeu por key/mouse/touch/gamepad button");
-    //     return true;
-    // }
-    // if (Math.abs(_mouseAxisX) > MOUSE_AXIS_THRESHOLD ||
-    //     Math.abs(_mouseAxisY) > MOUSE_AXIS_THRESHOLD) {
-    //     console.log("DEBUG: Perdeu por mouse/touch axis. X:", _mouseAxisX.toFixed(2), "Y:", _mouseAxisY.toFixed(2));
-    //     return true;
-    // }
-    // if (_gamepadAnyAxisMoved) {
-    //     console.log("DEBUG: Perdeu por gamepad axis");
-    //     return true;
-    // }
-    // ** FIM DEBUG **
+    // Teclado, clique do mouse, toques (ações discretas)
+    if (_anyKeyDown || _mouseButtonDown0 || _touchCount > 0) {
+        // console.log("DEBUG: Perdeu por key/mouse/touch"); // DEBUG
+        return true;
+    }
 
-    // Aceleração: verifica se o movimento é significativo (MAIS FOCO AQUI!)
+    // Aceleração: verifica se o movimento é significativo
     if (Math.abs(_acceleration.x) > ACCELERATION_THRESHOLD ||
         Math.abs(_acceleration.y) > ACCELERATION_THRESHOLD ||
         Math.abs(_acceleration.z) > ACCELERATION_THRESHOLD) {
-        console.log(`DEBUG: Perdeu por ACELERAÇÃO! X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`);
+        // console.log(`DEBUG: Perdeu por ACELERAÇÃO! X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`); // DEBUG
+        return true;
+    }
+
+    // Movimento do mouse/touch emulado: verifica se o movimento é significativo
+    if (Math.abs(_mouseAxisX) > MOUSE_AXIS_THRESHOLD ||
+        Math.abs(_mouseAxisY) > MOUSE_AXIS_THRESHOLD) {
+        // console.log("DEBUG: Perdeu por mouse/touch axis. X:", _mouseAxisX.toFixed(2), "Y:", _mouseAxisY.toFixed(2)); // DEBUG
         return true;
     }
 
@@ -91,8 +87,7 @@ function clearAllInputStates() {
     _mouseAxisY = 0;
     _touchCount = 0;
     _acceleration = { x: 0, y: 0, z: 0 }; // Garante que a aceleração seja zerada na transição
-    _gamepadAnyButtonPressed = false;
-    _gamepadAnyAxisMoved = false;
+    // _gamepadAnyButtonPressed e _gamepadAnyAxisMoved REMOVIDOS
 }
 
 // --- Event Listeners Globais e Permanentes ---
@@ -114,40 +109,12 @@ if (window.DeviceMotionEvent) {
             _acceleration.x = e.accelerationIncludingGravity.x;
             _acceleration.y = e.accelerationIncludingGravity.y;
             _acceleration.z = e.accelerationIncludingGravity.z;
-            // Descomente esta linha para VER O INPUT DO ACELERÔMETRO EM TEMPO REAL
-            // console.log(`LIVE ACCEL: X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`);
+            // console.log(`LIVE ACCEL: X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`); // DESCOMENTE PARA DEPURAR ACELERÔMETRO
         }
     });
 }
 
-// Lógica de Gamepad
-function checkGamepads() {
-    const gamepads = navigator.getGamepads();
-    _gamepadAnyButtonPressed = false;
-    _gamepadAnyAxisMoved = false;
-
-    for (let i = 0; i < gamepads.length; i++) {
-        const gamepad = gamepads[i];
-        if (gamepad) {
-            for (let b = 0; b < gamepad.buttons.length; b++) {
-                if (gamepad.buttons[b].pressed) {
-                    _gamepadAnyButtonPressed = true;
-                    break;
-                }
-            }
-            if (_gamepadAnyButtonPressed) break;
-
-            for (let a = 0; a < gamepad.axes.length; a++) {
-                const axisValue = gamepad.axes[a];
-                if (Math.abs(axisValue) > 0.1) {
-                    _gamepadAnyAxisMoved = true;
-                    break;
-                }
-            }
-            if (_gamepadAnyAxisMoved) break;
-        }
-    }
-}
+// Lógica de Gamepad REMOVIDA - a função checkGamepads() não existe mais
 
 
 // --- Funções de Lógica do Jogo ---
@@ -213,12 +180,12 @@ function atualizar() {
     const deltaTime = tempoAtual - tempoUltimoFrame;
     tempoUltimoFrame = tempoAtual;
 
-    checkGamepads(); // Verifica gamepads a cada frame
+    // checkGamepads(); REMOVIDO
 
     switch (estadoAtual) {
         case EstadosDoJogo.NaoIniciado:
-            // O jogo inicia se QUALQUER input for detectado
-            if (_anyKeyDown || _mouseButtonDown0 || _gamepadAnyButtonPressed || _gamepadAnyAxisMoved || _touchCount > 0) {
+            // O jogo inicia se QUALQUER input for detectado (AGORA SEM GAMEPAD)
+            if (_anyKeyDown || _mouseButtonDown0 || _touchCount > 0) { // _gamepadAnyButtonPressed e _gamepadAnyAxisMoved REMOVIDOS
                 estadoAtual = EstadosDoJogo.EmProgresso;
                 tempoUltimaMudancaEstado = tempoAtual;
                 immunityEndTime = tempoAtual + initialImmunityPeriod;
@@ -246,9 +213,9 @@ function atualizar() {
                 `Recorde: ${formatarTempo(recordeTempo)}\n\n` +
                 `Pressione qualquer tecla ou toque na tela para reiniciar`;
 
-            // Permite reiniciar após 1 segundo de "Game Over"
+            // Permite reiniciar após 1 segundo de "Game Over" (AGORA SEM GAMEPAD)
             if (tempoAtual - tempoUltimaMudancaEstado >= 1000 &&
-               (_anyKeyDown || _mouseButtonDown0 || _gamepadAnyButtonPressed || _gamepadAnyAxisMoved || _touchCount > 0)) {
+               (_anyKeyDown || _mouseButtonDown0 || _touchCount > 0)) { // _gamepadAnyButtonPressed e _gamepadAnyAxisMoved REMOVIDOS
                 reiniciarJogo();
                 console.log("Jogo REINICIADO.");
             }
