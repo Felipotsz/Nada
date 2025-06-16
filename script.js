@@ -39,18 +39,15 @@ let _mouseAxisX = 0;
 let _mouseAxisY = 0;
 
 // --- CONFIGURAÇÕES DE SENSIBILIDADE E COMPATIBILIDADE MOBILE ---
-// Limiar padrão para o acelerômetro (não será usado na detecção principal de "algo" por enquanto)
+// Limiar padrão para o acelerômetro (não será usado na detecção principal de "algo" no mobile)
 let ACCELERATION_THRESHOLD = 0.8;
 
-// Limiar para movimento do mouse/touch emulado (não será usado na detecção principal de "algo" por enquanto)
+// Limiar para movimento do mouse. Este valor é para Desktop.
 const MOUSE_AXIS_THRESHOLD = 1.5;
 
-// ATENÇÃO: Desativamos a flag de diagnóstico. A detecção de input agora está REATIVADA.
-const DIAGNOSTIC_DISABLE_ALL_INPUT_DETECTION = false;
-
-// Esta flag controla se o acelerômetro e o movimento do mouse/touch serão considerados inputs.
-// Recomenda-se TRUE para mobile se o dispositivo for muito ruidoso.
-const DISABLE_ACCELEROMETER_AND_MOUSE_AXIS_ON_MOBILE = true; // DEFINIDO COMO TRUE por padrão para evitar ruído
+// Esta flag controla se o acelerômetro E O MOVIMENTO DO MOUSE/TOUCH serão considerados inputs NO MOBILE.
+// Mantenha TRUE para mobile se o dispositivo for muito ruidoso e você não quiser que o movimento o faça perder.
+const DISABLE_ACCELEROMETER_AND_MOUSE_AXIS_ON_MOBILE = true; // Mantenha TRUE para o mobile
 
 const isMobileDevice = /Mobi|Android/i.test(navigator.userAgent);
 
@@ -62,16 +59,10 @@ function getDidSomething() {
         return false;
     }
 
-    // --- Modo de Diagnóstico (agora desativado) ---
-    if (DIAGNOSTIC_DISABLE_ALL_INPUT_DETECTION) {
-        console.log("DIAGNÓSTICO: Todas as detecções de input estão DESATIVADAS. O jogo NÃO DEVERIA PERDER.");
-        return false;
-    }
-
     // --- Lógica de detecção de "algo" ---
 
     // 1. Teclado, clique do mouse, toques (ações discretas)
-    // ESTES SÃO OS INPUTS BÁSICOS QUE DEVEM CAUSAR A PERDA.
+    // Estes são os inputs básicos que devem causar a perda.
     if (_anyKeyDown) {
         console.log("DEBUG: Perdeu por tecla pressionada.");
         return true;
@@ -86,29 +77,28 @@ function getDidSomething() {
         return true;
     }
 
-    // 2. Acelerômetro e movimento do mouse/touch emulado (CONDICIONAIS)
-    // Estas detecções são ativadas/desativadas pela flag DISABLE_ACCELEROMETER_AND_MOUSE_AXIS_ON_MOBILE
-    if (!DISABLE_ACCELEROMETER_AND_MOUSE_AXIS_ON_MOBILE) {
-        // Acelerômetro
+    // 2. Movimento do Mouse (APENAS PARA DESKTOP) e Acelerômetro (CONDICIONAL)
+    // Se não for um dispositivo mobile OU se a detecção desses inputs NÃO ESTIVER DESATIVADA globalmente.
+    if (!isMobileDevice || !DISABLE_ACCELEROMETER_AND_MOUSE_AXIS_ON_MOBILE) {
+        // Movimento do mouse (para desktop)
+        if (Math.abs(_mouseAxisX) > MOUSE_AXIS_THRESHOLD ||
+            Math.abs(_mouseAxisY) > MOUSE_AXIS_THRESHOLD) {
+            console.log("DEBUG: Perdeu por mouse axis. X:", _mouseAxisX.toFixed(2), "Y:", _mouseAxisY.toFixed(2));
+            return true;
+        }
+
+        // Acelerômetro (será considerado apenas se não for mobile OU se DISABLE_ACCELEROMETER_AND_MOUSE_AXIS_ON_MOBILE for false)
         if (Math.abs(_acceleration.x) > ACCELERATION_THRESHOLD ||
             Math.abs(_acceleration.y) > ACCELERATION_THRESHOLD ||
             Math.abs(_acceleration.z) > ACCELERATION_THRESHOLD) {
             console.log(`DEBUG: Perdeu por ACELERAÇÃO! X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`);
             return true;
         }
-
-        // Movimento do mouse/touch emulado
-        if (Math.abs(_mouseAxisX) > MOUSE_AXIS_THRESHOLD ||
-            Math.abs(_mouseAxisY) > MOUSE_AXIS_THRESHOLD) {
-            console.log("DEBUG: Perdeu por mouse/touch axis. X:", _mouseAxisX.toFixed(2), "Y:", _mouseAxisY.toFixed(2));
-            return true;
-        }
     } else {
-        // Se a flag estiver ativada, e o dispositivo for mobile, ignore esses inputs
-        if (isMobileDevice) {
-            // console.log("DEBUG: Acelerômetro e Mouse Axis ignorados no mobile.");
-        }
+        // Se a flag estiver ativada E o dispositivo for mobile, ignore esses inputs
+        // console.log("DEBUG: Acelerômetro e Mouse Axis ignorados no mobile.");
     }
+
 
     // Se nada acima foi detectado, o jogador está fazendo "nada"
     return false;
