@@ -14,13 +14,13 @@ let tempoUltimaMudancaEstado = 0; // Marcação de tempo da última mudança de 
 let tempoUltimoFrame = performance.now(); // Para calcular o deltaTime
 
 // Tempo de graça após o início do jogo (em milissegundos)
-// Aumentando um pouco para mobile, onde o touch pode ter mais "ruído" inicial
-const gracePeriodAfterStart = 750; // Aumentado para 0.75 segundos
-let tempoInicioGracePeriod = 0; // Marca o tempo quando o grace period começou
+// Ajuste para um valor que pareça razoável, 1000ms (1 segundo) é um bom ponto de partida.
+const initialImmunityPeriod = 1000; // NOVO: Período de imunidade total a inputs após o início
+let immunityEndTime = 0; // NOVO: Tempo em que a imunidade termina
 
 // NOVAS VARIÁVEIS DE SCORE
-let ultimoTempoJogada = 0; // Armazenará o tempo da última vez que o usuário jogou (em ms)
-let recordeTempo = 0;      // Armazenará o recorde de tempo (em ms)
+let ultimoTempoJogada = 0;
+let recordeTempo = 0;
 const KEY_ULTIMO_TEMPO = 'nadaGameLastTime';
 const KEY_RECORDE_TEMPO = 'nadaGameRecordTime';
 
@@ -34,7 +34,7 @@ const elementoTimer = document.getElementById('timerText');
 // --- Variáveis de Estado do Input (Replicando o Input do Unity) ---
 let _anyKeyDown = false;
 let _mouseButtonDown0 = false;
-let _touchCount = 0; // Número de toques ativos
+let _touchCount = 0;
 let _acceleration = { x: 0, y: 0, z: 0 };
 let _mouseAxisX = 0;
 let _mouseAxisY = 0;
@@ -46,7 +46,7 @@ function getDidSomething() {
     const noInputExceptPossibleMouseY =
         !_anyKeyDown &&
         !_mouseButtonDown0 &&
-        _touchCount <= 0 && // Se houver toques ativos, é "algo"
+        _touchCount <= 0 &&
         (_acceleration.x === 0 && _acceleration.y === 0 && _acceleration.z === 0) &&
         _mouseAxisX === 0 &&
         !_gamepadAnyButtonPressed &&
@@ -65,12 +65,11 @@ function clearAllInputStates() {
     _mouseButtonDown0 = false;
     _mouseAxisX = 0;
     _mouseAxisY = 0;
-    _touchCount = 0; // ESSENCIAL: Garante que o touchCount seja zerado
-    _acceleration = { x: 0, y: 0, z: 0 }; // ESSENCIAL: Garante que a aceleração seja zerada
+    _touchCount = 0;
+    _acceleration = { x: 0, y: 0, z: 0 };
     _gamepadAnyButtonPressed = false;
     _gamepadAnyAxisMoved = false;
 }
-
 
 // --- Event Listeners para capturar input do usuário ---
 document.addEventListener('keydown', (e) => {
@@ -95,10 +94,9 @@ document.addEventListener('mousemove', (e) => {
 // Touch events: importante que eles mantenham o _touchCount atualizado
 document.addEventListener('touchstart', (e) => {
     _touchCount = e.touches.length;
-    // Previne o comportamento padrão do navegador, como rolagem ou zoom, ao tocar.
-    // Isso é útil para jogos, mas pode interferir se você precisar de rolagem em outras partes.
-    e.preventDefault();
-}, { passive: false }); // { passive: false } é necessário para que preventDefault funcione em alguns navegadores
+    // Opcional, dependendo se você quer permitir rolagem etc.
+    // e.preventDefault(); 
+}, { passive: true }); // Mudar para true se não for usar preventDefault.
 
 document.addEventListener('touchend', (e) => {
     _touchCount = e.touches.length;
@@ -201,7 +199,7 @@ function reiniciarJogo() {
         `Recorde: ${formatarTempo(recordeTempo)}`;
     tempoUltimaMudancaEstado = performance.now();
     tempoUltimoFrame = performance.now();
-    tempoInicioGracePeriod = 0;
+    immunityEndTime = 0; // Garante que a imunidade não esteja ativa antes do início
     clearAllInputStates();
 }
 
@@ -212,13 +210,16 @@ function atualizar() {
 
     checkGamepads();
 
+    // Verifique se o período de imunidade acabou
+    const isImmunityActive = tempoAtual < immunityEndTime;
+
     switch (estadoAtual) {
         case EstadosDoJogo.NaoIniciado:
-            // --- ATUALIZADO: Inclui _touchCount para iniciar no mobile ---
             if (_anyKeyDown || _mouseButtonDown0 || _gamepadAnyButtonPressed || _gamepadAnyAxisMoved || _touchCount > 0) {
                 estadoAtual = EstadosDoJogo.EmProgresso;
                 tempoUltimaMudancaEstado = tempoAtual;
-                tempoInicioGracePeriod = tempoAtual;
+                // Define o fim do período de imunidade total
+                immunityEndTime = tempoAtual + initialImmunityPeriod; 
                 clearAllInputStates(); // Limpa TODOS os inputs imediatamente após a transição
             }
             break;
@@ -227,12 +228,8 @@ function atualizar() {
             elementoTimer.innerHTML = `Você está fazendo ${textoNada} há\n${formatarTempo(tempoInatividade)}\n`;
             tempoInatividade += deltaTime;
 
-            const tempoDesdeInicioGracePeriod = tempoAtual - tempoInicioGracePeriod;
-
-            if (tempoDesdeInicioGracePeriod >= gracePeriodAfterStart &&
-                tempoAtual - tempoUltimaMudancaEstado >= 1000 &&
-                getDidSomething())
-            {
+            // Condição para perder: o período de imunidade terminou E fez algo
+            if (!isImmunityActive && getDidSomething()) {
                 atualizarScores();
                 tempoUltimaMudancaEstado = tempoAtual;
                 estadoAtual = EstadosDoJogo.FimDeJogo;
@@ -244,9 +241,8 @@ function atualizar() {
                 `Você fez ${textoAlgo}, você perdeu\n` +
                 `Você fez ${textoNada} por ${formatarTempo(ultimoTempoJogada)}\n\n` +
                 `Recorde: ${formatarTempo(recordeTempo)}\n\n` +
-                `Pressione qualquer tecla ou toque na tela para reiniciar`; // Adicionado toque na instrução
+                `Pressione qualquer tecla ou toque na tela para reiniciar`;
 
-            // --- ATUALIZADO: Inclui _touchCount para reiniciar no mobile ---
             if (tempoAtual - tempoUltimaMudancaEstado >= 1000 && (_anyKeyDown || _mouseButtonDown0 || _gamepadAnyButtonPressed || _gamepadAnyAxisMoved || _touchCount > 0)) {
                 reiniciarJogo();
             }
@@ -257,9 +253,7 @@ function atualizar() {
     _mouseButtonDown0 = false;
     _mouseAxisX = 0;
     _mouseAxisY = 0;
-    // _touchCount não é resetado aqui, pois é gerido por touchstart/touchend/touchcancel
-    // _acceleration não é resetado aqui, pois é gerido por devicemotion
-    // _gamepadAny... são resetados a cada frame por checkGamepads()
+    // _touchCount, _acceleration, _gamepadAny... são tratados por seus listeners ou checkGamepads().
 }
 
 // --- Loop Principal do Jogo ---
