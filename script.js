@@ -14,7 +14,7 @@ let tempoUltimaMudancaEstado = 0; // Marcação de tempo da última mudança de 
 let tempoUltimoFrame = performance.now(); // Para calcular o deltaTime
 
 // Tempo de imunidade total a inputs após o início (em milissegundos)
-const initialImmunityPeriod = 3000; // AUMENTADO PARA 3 SEGUNDOS para maior segurança!
+const initialImmunityPeriod = 3000; // Mantido em 3 segundos
 let immunityEndTime = 0;
 
 // NOVAS VARIÁVEIS DE SCORE
@@ -39,18 +39,16 @@ let _mouseAxisX = 0;
 let _mouseAxisY = 0;
 
 // --- CONFIGURAÇÕES DE SENSIBILIDADE E COMPATIBILIDADE MOBILE ---
-// Limiar padrão para o acelerômetro. Se o seu dispositivo tiver muito ruído, AUMENTE ESTE VALOR.
-let ACCELERATION_THRESHOLD = 0.8; // Valor padrão elevado para 0.8 (m/s^2)
+// Limiar padrão para o acelerômetro (mantido, mas não será usado se a flag for true)
+let ACCELERATION_THRESHOLD = 0.8;
 
-// Limiar para movimento do mouse/touch emulado.
-const MOUSE_AXIS_THRESHOLD = 1.5;   // AUMENTADO para 1.5 pixels/unidades
+// Limiar para movimento do mouse/touch emulado
+const MOUSE_AXIS_THRESHOLD = 1.5;
 
-// ATENÇÃO: Se o problema persistir APÓS TESTAR DIVERSOS VALORES PARA ACCELERATION_THRESHOLD,
-// defina esta flag como 'true' APENAS PARA O MOBILE.
-// Isso DESATIVA COMPLETAMENTE a detecção do acelerômetro.
-const DISABLE_ACCELEROMETER_ON_MOBILE = false; // Mude para 'true' se for um último recurso
+// ATENÇÃO: PARA TESTE DE DIAGNÓSTICO FINAL, VAMOS ATIVAR ISTO
+// Isso desativa COMPLETAMENTE a detecção de input para diagnóstico.
+const DIAGNOSTIC_DISABLE_ALL_INPUT_DETECTION = true; // MUDE PARA TRUE APENAS PARA ESTE TESTE FINAL!
 
-// Verifica se o dispositivo é mobile (simplificado, pode não ser 100% preciso, mas funciona na maioria)
 const isMobileDevice = /Mobi|Android/i.test(navigator.userAgent);
 
 
@@ -61,29 +59,35 @@ function getDidSomething() {
         return false;
     }
 
-    // --- Lógica de detecção de "algo" com limiares ---
+    // --- MODO DE DIAGNÓSTICO: DESATIVAR TODAS AS DETECÇÕES DE INPUT ---
+    if (DIAGNOSTIC_DISABLE_ALL_INPUT_DETECTION) {
+        console.log("DIAGNÓSTICO: Todas as detecções de input estão DESATIVADAS. O jogo NÃO DEVERIA PERDER.");
+        return false; // Neste modo, o jogo NUNCA deveria detectar "algo"
+    }
+
+    // --- Lógica de detecção de "algo" com limiares (se DIAGNOSTIC_DISABLE_ALL_INPUT_DETECTION for false) ---
 
     // Teclado, clique do mouse, toques (ações discretas)
     if (_anyKeyDown || _mouseButtonDown0 || _touchCount > 0) {
-        // console.log("DEBUG: Perdeu por key/mouse/touch"); // DEBUG
+        console.log("DEBUG: Perdeu por key/mouse/touch"); // DEBUG
         return true;
     }
 
-    // Aceleração: verifica se o movimento é significativo, respeitando a flag de desativação
-    if (!DISABLE_ACCELEROMETER_ON_MOBILE || !isMobileDevice) { // Só verifica aceleração se não for desativada no mobile
-        if (Math.abs(_acceleration.x) > ACCELERATION_THRESHOLD ||
-            Math.abs(_acceleration.y) > ACCELERATION_THRESHOLD ||
-            Math.abs(_acceleration.z) > ACCELERATION_THRESHOLD) {
-            // console.log(`DEBUG: Perdeu por ACELERAÇÃO! X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`); // DEBUG
-            return true;
-        }
+    // Aceleração: verifica se o movimento é significativo (apenas se não estiver no modo de desativação total)
+    // Se DISABLE_ACCELEROMETER_ON_MOBILE estivesse em uso, a lógica aqui seria mais complexa.
+    // Mas com DIAGNOSTIC_DISABLE_ALL_INPUT_DETECTION, este bloco será ignorado de qualquer forma.
+    if (Math.abs(_acceleration.x) > ACCELERATION_THRESHOLD ||
+        Math.abs(_acceleration.y) > ACCELERATION_THRESHOLD ||
+        Math.abs(_acceleration.z) > ACCELERATION_THRESHOLD) {
+        console.log(`DEBUG: Perdeu por ACELERAÇÃO! X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`); // DEBUG
+        return true;
     }
 
 
     // Movimento do mouse/touch emulado: verifica se o movimento é significativo
     if (Math.abs(_mouseAxisX) > MOUSE_AXIS_THRESHOLD ||
         Math.abs(_mouseAxisY) > MOUSE_AXIS_THRESHOLD) {
-        // console.log("DEBUG: Perdeu por mouse/touch axis. X:", _mouseAxisX.toFixed(2), "Y:", _mouseAxisY.toFixed(2)); // DEBUG
+        console.log("DEBUG: Perdeu por mouse/touch axis. X:", _mouseAxisX.toFixed(2), "Y:", _mouseAxisY.toFixed(2)); // DEBUG
         return true;
     }
 
@@ -104,13 +108,15 @@ function clearAllInputStates() {
 }
 
 // --- Event Listeners Globais e Permanentes ---
-document.addEventListener('keydown', (e) => { _anyKeyDown = true; /* if (e.key === 'Escape') { console.log("Escape pressionado."); } */ });
+// Estes listeners ainda estarão ATUALIZANDO AS VARIÁVEIS,
+// mas getDidSomething() VAI IGNORÁ-LOS no modo de diagnóstico.
+document.addEventListener('keydown', (e) => { _anyKeyDown = true; });
 document.addEventListener('mousedown', (e) => { if (e.button === 0) { _mouseButtonDown0 = true; } });
 document.addEventListener('mousemove', (e) => { _mouseAxisX = e.movementX; _mouseAxisY = e.movementY; });
 
 document.addEventListener('touchstart', (e) => {
     _touchCount = e.touches.length;
-    // e.preventDefault(); // Descomente para impedir rolagem/zoom ao tocar
+    // e.preventDefault();
 }, { passive: false });
 
 document.addEventListener('touchend', (e) => { _touchCount = e.touches.length; });
@@ -122,8 +128,7 @@ if (window.DeviceMotionEvent) {
             _acceleration.x = e.accelerationIncludingGravity.x;
             _acceleration.y = e.accelerationIncludingGravity.y;
             _acceleration.z = e.accelerationIncludingGravity.z;
-            // Descomente para DEPURAR O VALOR DO ACELERÔMETRO EM TEMPO REAL
-            // console.log(`LIVE ACCEL: X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`);
+            // console.log(`LIVE ACCEL: X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`); // Ainda útil para ver os valores brutos
         }
     });
 }
