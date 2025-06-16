@@ -1,3 +1,5 @@
+// script.js
+
 // Definição dos estados do jogo
 const EstadosDoJogo = {
     NaoIniciado: 'naoIniciado',
@@ -12,10 +14,11 @@ let tempoUltimaMudancaEstado = 0; // Marcação de tempo da última mudança de 
 let tempoUltimoFrame = performance.now(); // Para calcular o deltaTime
 
 // Tempo de graça após o início do jogo (em milissegundos)
-const gracePeriodAfterStart = 500; // 0.5 segundos (você pode ajustar este valor)
+// Aumentando um pouco para mobile, onde o touch pode ter mais "ruído" inicial
+const gracePeriodAfterStart = 750; // Aumentado para 0.75 segundos
 let tempoInicioGracePeriod = 0; // Marca o tempo quando o grace period começou
 
-// --- NOVAS VARIÁVEIS DE SCORE ---
+// NOVAS VARIÁVEIS DE SCORE
 let ultimoTempoJogada = 0; // Armazenará o tempo da última vez que o usuário jogou (em ms)
 let recordeTempo = 0;      // Armazenará o recorde de tempo (em ms)
 const KEY_ULTIMO_TEMPO = 'nadaGameLastTime';
@@ -31,7 +34,7 @@ const elementoTimer = document.getElementById('timerText');
 // --- Variáveis de Estado do Input (Replicando o Input do Unity) ---
 let _anyKeyDown = false;
 let _mouseButtonDown0 = false;
-let _touchCount = 0;
+let _touchCount = 0; // Número de toques ativos
 let _acceleration = { x: 0, y: 0, z: 0 };
 let _mouseAxisX = 0;
 let _mouseAxisY = 0;
@@ -43,7 +46,7 @@ function getDidSomething() {
     const noInputExceptPossibleMouseY =
         !_anyKeyDown &&
         !_mouseButtonDown0 &&
-        _touchCount <= 0 &&
+        _touchCount <= 0 && // Se houver toques ativos, é "algo"
         (_acceleration.x === 0 && _acceleration.y === 0 && _acceleration.z === 0) &&
         _mouseAxisX === 0 &&
         !_gamepadAnyButtonPressed &&
@@ -62,11 +65,12 @@ function clearAllInputStates() {
     _mouseButtonDown0 = false;
     _mouseAxisX = 0;
     _mouseAxisY = 0;
-    _touchCount = 0;
-    _acceleration = { x: 0, y: 0, z: 0 };
+    _touchCount = 0; // ESSENCIAL: Garante que o touchCount seja zerado
+    _acceleration = { x: 0, y: 0, z: 0 }; // ESSENCIAL: Garante que a aceleração seja zerada
     _gamepadAnyButtonPressed = false;
     _gamepadAnyAxisMoved = false;
 }
+
 
 // --- Event Listeners para capturar input do usuário ---
 document.addEventListener('keydown', (e) => {
@@ -88,9 +92,14 @@ document.addEventListener('mousemove', (e) => {
     _mouseAxisY = e.movementY;
 });
 
+// Touch events: importante que eles mantenham o _touchCount atualizado
 document.addEventListener('touchstart', (e) => {
     _touchCount = e.touches.length;
-});
+    // Previne o comportamento padrão do navegador, como rolagem ou zoom, ao tocar.
+    // Isso é útil para jogos, mas pode interferir se você precisar de rolagem em outras partes.
+    e.preventDefault();
+}, { passive: false }); // { passive: false } é necessário para que preventDefault funcione em alguns navegadores
+
 document.addEventListener('touchend', (e) => {
     _touchCount = e.touches.length;
 });
@@ -140,7 +149,6 @@ function checkGamepads() {
 
 // --- Funções de Lógica do Jogo ---
 
-// Função para formatar o tempo (agora mais flexível para reutilização)
 function formatarTempo(tempoMs) {
     let segundosTotal = Math.floor(tempoMs / 1000);
     let dias = Math.floor(segundosTotal / 86400);
@@ -163,7 +171,6 @@ function formatarTempo(tempoMs) {
     return texto + `${segundos} ${segundos === 1 ? "segundo" : "segundos"}`;
 }
 
-// --- NOVAS FUNÇÕES PARA O SCORE ---
 function carregarScores() {
     const ultimoTempoSalvo = localStorage.getItem(KEY_ULTIMO_TEMPO);
     const recordeTempoSalvo = localStorage.getItem(KEY_RECORDE_TEMPO);
@@ -182,21 +189,17 @@ function atualizarScores() {
     if (tempoInatividade > recordeTempo) {
         recordeTempo = tempoInatividade;
     }
-    salvarScores(); // Salva no localStorage
+    salvarScores();
 }
-
-// --- Fim das NOVAS FUNÇÕES ---
-
 
 function reiniciarJogo() {
     estadoAtual = EstadosDoJogo.NaoIniciado;
     tempoInatividade = 0;
-    // --- ATUALIZADO: Mostra scores no menu inicial ---
     elementoTimer.innerHTML =
-        `Pressione qualquer tecla para começar a fazer ${textoNada}\n\n` +
+        `Pressione qualquer tecla ou toque na tela para começar a fazer ${textoNada}\n\n` +
         `Última jogada: ${formatarTempo(ultimoTempoJogada)}\n` +
         `Recorde: ${formatarTempo(recordeTempo)}`;
-    tiempoUltimaMudancaEstado = performance.now();
+    tempoUltimaMudancaEstado = performance.now();
     tempoUltimoFrame = performance.now();
     tempoInicioGracePeriod = 0;
     clearAllInputStates();
@@ -211,11 +214,12 @@ function atualizar() {
 
     switch (estadoAtual) {
         case EstadosDoJogo.NaoIniciado:
-            if (_anyKeyDown || _mouseButtonDown0 || _gamepadAnyButtonPressed || _gamepadAnyAxisMoved) {
+            // --- ATUALIZADO: Inclui _touchCount para iniciar no mobile ---
+            if (_anyKeyDown || _mouseButtonDown0 || _gamepadAnyButtonPressed || _gamepadAnyAxisMoved || _touchCount > 0) {
                 estadoAtual = EstadosDoJogo.EmProgresso;
                 tempoUltimaMudancaEstado = tempoAtual;
                 tempoInicioGracePeriod = tempoAtual;
-                clearAllInputStates();
+                clearAllInputStates(); // Limpa TODOS os inputs imediatamente após a transição
             }
             break;
 
@@ -229,21 +233,21 @@ function atualizar() {
                 tempoAtual - tempoUltimaMudancaEstado >= 1000 &&
                 getDidSomething())
             {
-                atualizarScores(); // --- NOVO: Atualiza scores antes de ir para FimDeJogo ---
+                atualizarScores();
                 tempoUltimaMudancaEstado = tempoAtual;
                 estadoAtual = EstadosDoJogo.FimDeJogo;
             }
             break;
 
         case EstadosDoJogo.FimDeJogo:
-            // --- ATUALIZADO: Mostra scores na tela de Game Over ---
             elementoTimer.innerHTML =
                 `Você fez ${textoAlgo}, você perdeu\n` +
-                `Você fez ${textoNada} por ${formatarTempo(ultimoTempoJogada)}\n\n` + // Usa ultimoTempoJogada aqui
+                `Você fez ${textoNada} por ${formatarTempo(ultimoTempoJogada)}\n\n` +
                 `Recorde: ${formatarTempo(recordeTempo)}\n\n` +
-                `Pressione qualquer tecla para reiniciar`;
+                `Pressione qualquer tecla ou toque na tela para reiniciar`; // Adicionado toque na instrução
 
-            if (tempoAtual - tempoUltimaMudancaEstado >= 1000 && (_anyKeyDown || _mouseButtonDown0 || _gamepadAnyButtonPressed || _gamepadAnyAxisMoved)) {
+            // --- ATUALIZADO: Inclui _touchCount para reiniciar no mobile ---
+            if (tempoAtual - tempoUltimaMudancaEstado >= 1000 && (_anyKeyDown || _mouseButtonDown0 || _gamepadAnyButtonPressed || _gamepadAnyAxisMoved || _touchCount > 0)) {
                 reiniciarJogo();
             }
             break;
@@ -253,6 +257,9 @@ function atualizar() {
     _mouseButtonDown0 = false;
     _mouseAxisX = 0;
     _mouseAxisY = 0;
+    // _touchCount não é resetado aqui, pois é gerido por touchstart/touchend/touchcancel
+    // _acceleration não é resetado aqui, pois é gerido por devicemotion
+    // _gamepadAny... são resetados a cada frame por checkGamepads()
 }
 
 // --- Loop Principal do Jogo ---
@@ -264,7 +271,7 @@ function gameLoop() {
 // --- Inicialização do Jogo ---
 document.addEventListener('DOMContentLoaded', () => {
     if (elementoTimer) {
-        carregarScores(); // --- NOVO: Carrega os scores ao iniciar a página ---
+        carregarScores();
         reiniciarJogo();
         requestAnimationFrame(gameLoop);
     } else {
