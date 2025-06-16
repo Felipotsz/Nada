@@ -14,7 +14,7 @@ let tempoUltimaMudancaEstado = 0; // Marcação de tempo da última mudança de 
 let tempoUltimoFrame = performance.now(); // Para calcular o deltaTime
 
 // Tempo de imunidade total a inputs após o início (em milissegundos)
-const initialImmunityPeriod = 1500; // Aumentado para 1.5 segundos para maior segurança no mobile
+const initialImmunityPeriod = 2000; // Aumentado para 2 segundos para máxima segurança no mobile
 let immunityEndTime = 0;
 
 // NOVAS VARIÁVEIS DE SCORE
@@ -31,6 +31,7 @@ const textoAlgo = "<span style='color:#000000;'>Algo</span>";
 const elementoTimer = document.getElementById('timerText');
 
 // --- Variáveis de Estado do Input (Replicando o Input do Unity) ---
+// Estes serão atualizados pelos listeners, mas a lógica de início usará um método diferente.
 let _anyKeyDown = false;
 let _mouseButtonDown0 = false;
 let _touchCount = 0;
@@ -43,7 +44,6 @@ let _gamepadAnyAxisMoved = false;
 // Propriedade computada 'didSomething'
 function getDidSomething() {
     // Se ainda estamos no período de imunidade, retorne false imediatamente.
-    // Isto é a "última linha de defesa" para ignorar qualquer input.
     if (performance.now() < immunityEndTime) {
         return false;
     }
@@ -64,7 +64,6 @@ function getDidSomething() {
 }
 
 // --- Funções Auxiliares para Manipular Input ---
-
 function clearAllInputStates() {
     _anyKeyDown = false;
     _mouseButtonDown0 = false;
@@ -76,8 +75,32 @@ function clearAllInputStates() {
     _gamepadAnyAxisMoved = false;
 }
 
-// --- Event Listeners para capturar input do usuário ---
-// Os listeners são adicionados apenas uma vez no DOMContentLoaded
+// --- NOVO: Handler de Input Único para Início/Reinício ---
+function handleGameStartInput() {
+    // Esta função será chamada por qualquer input no estado NaoIniciado ou FimDeJogo
+    if (estadoAtual === EstadosDoJogo.NaoIniciado || estadoAtual === EstadosDoJogo.FimDeJogo) {
+        // Apenas para evitar múltiplos reinícios instantâneos no FimDeJogo
+        if (estadoAtual === EstadosDoJogo.FimDeJogo && (performance.now() - tempoUltimaMudancaEstado < 1000)) {
+            return;
+        }
+
+        estadoAtual = EstadosDoJogo.EmProgresso;
+        tempoUltimaMudancaEstado = performance.now();
+        immunityEndTime = performance.now() + initialImmunityPeriod;
+        tempoInatividade = 0; // Zera o tempo de inatividade para a nova jogada
+        clearAllInputStates(); // Limpa todos os inputs após o início
+
+        // Remove este listener temporário para evitar que ele interfira na lógica do jogo
+        document.removeEventListener('keydown', handleGameStartInput);
+        document.removeEventListener('mousedown', handleGameStartInput);
+        document.removeEventListener('touchstart', handleGameStartInput);
+        // Não removemos mousemove, devicemotion, gamepad pois eles são contínuos e não "disparam" o início
+    }
+}
+
+// --- Event Listeners Globais e Permanentes ---
+// Estes listeners atualizam as variáveis _anyKeyDown, _mouseAxis, etc.
+// Eles permanecem ativos durante todo o ciclo de vida do jogo.
 document.addEventListener('keydown', (e) => {
     _anyKeyDown = true;
     if (e.key === 'Escape') {
@@ -194,6 +217,16 @@ function atualizarScores() {
     salvarScores();
 }
 
+// --- NOVA Função para Configurar Listeners de Início ---
+function setupStartListeners() {
+    document.addEventListener('keydown', handleGameStartInput, { once: true });
+    document.addEventListener('mousedown', handleGameStartInput, { once: true });
+    document.addEventListener('touchstart', handleGameStartInput, { once: true });
+    // Para Gamepad, precisaríamos de uma lógica contínua que o detecte
+    // Não usaremos um listener 'once' para gamepad aqui, pois não há um evento 'gamepadconnected' universal
+    // O checkGamepads() é chamado no loop principal para detectar a ação do gamepad para o início
+}
+
 function reiniciarJogo() {
     estadoAtual = EstadosDoJogo.NaoIniciado;
     tempoInatividade = 0;
@@ -203,9 +236,9 @@ function reiniciarJogo() {
         `Recorde: ${formatarTempo(recordeTempo)}`;
     tempoUltimaMudancaEstado = performance.now();
     tempoUltimoFrame = performance.now();
-    immunityEndTime = 0; // Garante que a imunidade não esteja ativa
+    immunityEndTime = 0;
     clearAllInputStates();
-    // NÃO chamamos mais addInputListeners aqui, pois eles são persistentes
+    setupStartListeners(); // Configura os listeners "one-shot" para iniciar
 }
 
 function atualizar() {
@@ -213,24 +246,23 @@ function atualizar() {
     const deltaTime = tempoAtual - tempoUltimoFrame;
     tempoUltimoFrame = tempoAtual;
 
-    checkGamepads();
+    checkGamepads(); // Verifica gamepads a cada frame, mesmo na tela inicial
 
     switch (estadoAtual) {
         case EstadosDoJogo.NaoIniciado:
-            if (_anyKeyDown || _mouseButtonDown0 || _gamepadAnyButtonPressed || _gamepadAnyAxisMoved || _touchCount > 0) {
-                estadoAtual = EstadosDoJogo.EmProgresso;
-                tempoUltimaMudancaEstado = tempoAtual;
-                immunityEndTime = tempoAtual + initialImmunityPeriod;
-                clearAllInputStates(); // Limpa TODOS os inputs imediatamente após a transição
+            // A condição de início agora verifica também os gamepads aqui,
+            // caso o handleGameStartInput não tenha sido disparado por eles.
+            if (_gamepadAnyButtonPressed || _gamepadAnyAxisMoved) {
+                 handleGameStartInput(); // Força o início se um gamepad for usado
             }
+            // Não há mais 'if' com _anyKeyDown etc. aqui, pois handleGameStartInput cuida disso
             break;
 
         case EstadosDoJogo.EmProgresso:
             elementoTimer.innerHTML = `Você está fazendo ${textoNada} há\n${formatarTempo(tempoInatividade)}\n`;
             tempoInatividade += deltaTime;
 
-            // A condição de perda agora usa immunityEndTime diretamente no getDidSomething()
-            if (getDidSomething()) { // getDidSomething() já verifica immunityEndTime
+            if (getDidSomething()) {
                 atualizarScores();
                 tempoUltimaMudancaEstado = tempoAtual;
                 estadoAtual = EstadosDoJogo.FimDeJogo;
@@ -244,20 +276,20 @@ function atualizar() {
                 `Recorde: ${formatarTempo(recordeTempo)}\n\n` +
                 `Pressione qualquer tecla ou toque na tela para reiniciar`;
 
-            // Reinicia o jogo apenas após o período de 1 segundo de Game Over
-            if (tempoAtual - tempoUltimaMudancaEstado >= 1000 && (_anyKeyDown || _mouseButtonDown0 || _gamepadAnyButtonPressed || _gamepadAnyAxisMoved || _touchCount > 0)) {
+            // Para reiniciar, esperamos 1 segundo E um input qualquer (inclusive gamepad)
+            if (tempoAtual - tempoUltimaMudancaEstado >= 1000 &&
+               (_anyKeyDown || _mouseButtonDown0 || _gamepadAnyButtonPressed || _gamepadAnyAxisMoved || _touchCount > 0)) {
                 reiniciarJogo();
             }
             break;
     }
 
+    // Resetamos as flags de input base, que serão preenchidas pelos listeners para o próximo frame
     _anyKeyDown = false;
     _mouseButtonDown0 = false;
     _mouseAxisX = 0;
     _mouseAxisY = 0;
     // _touchCount, _acceleration, _gamepadAny... são tratados por seus listeners ou checkGamepads().
-    // E, crucialmente, o getDidSomething() agora é a "porta" final para detectar o "algo"
-    // respeitando o immunityEndTime.
 }
 
 // --- Loop Principal do Jogo ---
@@ -270,7 +302,7 @@ function gameLoop() {
 document.addEventListener('DOMContentLoaded', () => {
     if (elementoTimer) {
         carregarScores();
-        reiniciarJogo();
+        reiniciarJogo(); // Isso já chama setupStartListeners()
         requestAnimationFrame(gameLoop);
     } else {
         console.error("Elemento com ID 'timerText' não encontrado no HTML. O jogo não pode iniciar.");
