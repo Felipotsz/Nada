@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>O Jogo do Nada</title>
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            font-family: 'Consolas', 'Monospace', sans-serif;
+            text-align: center;
+            padding-top: 10vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #timerText {
+            font-size: 2.5em;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+        .instructions {
+            font-size: 0.9em;
+            margin-top: 20px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <div id="timerText"></div>
+    <div class="instructions">
+        Tente não mover o mouse, não clicar e não tocar!
+    </div>
+
+    <script src="NADA.js" defer></script>
+</body>
+</html>
