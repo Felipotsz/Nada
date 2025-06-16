@@ -13,9 +13,9 @@ let tempoInatividade = 0; // Tempo que o jogador está "fazendo nada" (em miliss
 let tempoUltimaMudancaEstado = 0; // Marcação de tempo da última mudança de estado (usando performance.now())
 let tempoUltimoFrame = performance.now(); // Para calcular o deltaTime
 
-// Tempo de imunidade total a inputs após o início (em milissegundos)
-const initialImmunityPeriod = 3000; // Mantido em 3 segundos
-let immunityEndTime = 0;
+// A linha abaixo foi removida ou seu valor alterado, pois não haverá imunidade.
+// const initialImmunityPeriod = 3000;
+let immunityEndTime = 0; // Esta variável não será mais usada para imunidade de perda.
 
 // NOVAS VARIÁVEIS DE SCORE
 let ultimoTempoJogada = 0;
@@ -36,16 +36,17 @@ let _mouseButtonDown0 = false;
 let _touchCount = 0;
 let _acceleration = { x: 0, y: 0, z: 0 };
 
-// NOVAS VARIÁVEIS PARA DETECÇÃO DE MOVIMENTO DO MOUSE POR POSIÇÃO ABSOLUTA
+// VARIÁVEIS PARA DETECÇÃO DE MOVIMENTO DO MOUSE POR POSIÇÃO ABSOLUTA
 let _lastMouseX = -1; // Posição X do mouse no frame anterior
 let _lastMouseY = -1; // Posição Y do mouse no frame anterior
-let _mouseMovedSignificantly = false; // Flag para indicar movimento significativo
+let _mouseMovedSignificantly = false; // Flag para indicar movimento significativo. NÂO zerada por frame!
+
 
 // --- CONFIGURAÇÕES DE SENSIBILIDADE E COMPATIBILIDADE MOBILE ---
 let ACCELERATION_THRESHOLD = 0.8;
 
 // Limiar para detectar movimento significativo do mouse pela posição absoluta (em pixels)
-const MOUSE_POSITION_THRESHOLD = 2; // Mover 2 pixels já é considerado "algo"
+const MOUSE_POSITION_THRESHOLD = 1;
 
 const DISABLE_ACCELEROMETER_AND_MOUSE_AXIS_ON_MOBILE = true;
 
@@ -54,46 +55,37 @@ const isMobileDevice = /Mobi|Android/i.test(navigator.userAgent);
 
 // Propriedade computada 'didSomething'
 function getDidSomething() {
-    // Se ainda estamos no período de imunidade, retorne false imediatamente.
-    if (performance.now() < immunityEndTime) {
-        return false;
-    }
+    // ATENÇÃO: A VERIFICAÇÃO DE IMMUNITY_END_TIME FOI REMOVIDA AQUI!
+    // if (performance.now() < immunityEndTime) {
+    //     return false;
+    // }
 
     // --- Lógica de detecção de "algo" ---
 
     // 1. Teclado, clique do mouse, toques (ações discretas)
     if (_anyKeyDown) {
-        console.log("DEBUG: Perdeu por tecla pressionada.");
         return true;
     }
     if (_mouseButtonDown0) {
-        console.log("DEBUG: Perdeu por clique do mouse.");
         return true;
     }
-    // Detector de toque: Se há 1 ou mais toques ativos, o usuário está "fazendo algo".
     if (_touchCount > 0) {
-        console.log("DEBUG: Perdeu por toque na tela (touchCount > 0).");
         return true;
     }
 
     // 2. Movimento do Mouse (APENAS PARA DESKTOP) e Acelerômetro (CONDICIONAL)
     if (!isMobileDevice || !DISABLE_ACCELEROMETER_AND_MOUSE_AXIS_ON_MOBILE) {
-        // Movimento do mouse (para desktop): usa a nova flag _mouseMovedSignificantly
         if (_mouseMovedSignificantly) {
-            console.log("DEBUG: Perdeu por mouse moved significantly.");
             return true;
         }
 
-        // Acelerômetro (será considerado apenas se não for mobile OU se DISABLE_ACCELEROMETER_AND_MOUSE_AXIS_ON_MOBILE for false)
         if (Math.abs(_acceleration.x) > ACCELERATION_THRESHOLD ||
-            Math.abs(_acceleration.y) > ACCELERATION_THRESHOLD ||
+            Math.abs(_acceleration.y) > ACCELERATION_THRESHOLD || // CORRIGIDO: ACELERATION_Y_THRESHOLD para Y
             Math.abs(_acceleration.z) > ACCELERATION_THRESHOLD) {
-            console.log(`DEBUG: Perdeu por ACELERAÇÃO! X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`);
             return true;
         }
     }
 
-    // Se nada acima foi detectado, o jogador está fazendo "nada"
     return false;
 }
 
@@ -105,29 +97,35 @@ function clearAllInputStates() {
     _mouseButtonDown0 = false;
     _touchCount = 0;
     _acceleration = { x: 0, y: 0, z: 0 };
-    _lastMouseX = -1; // Resetamos a posição do mouse para forçar uma nova detecção
-    _lastMouseY = -1; // Resetamos a posição do mouse para forçar uma nova detecção
-    _mouseMovedSignificantly = false; // Resetamos a flag de movimento
+    _lastMouseX = -1;
+    _lastMouseY = -1;
+    _mouseMovedSignificantly = false; // Resetamos a flag de movimento APENAS ao reiniciar o jogo
 }
 
 // --- Event Listeners Globais e Permanentes ---
 document.addEventListener('keydown', (e) => { _anyKeyDown = true; });
 document.addEventListener('mousedown', (e) => { if (e.button === 0) { _mouseButtonDown0 = true; } });
 
-// MODIFICADO: Event Listener de mousemove para capturar a posição absoluta
+// Event Listener de mousemove para capturar a posição absoluta e detectar movimento
 document.addEventListener('mousemove', (e) => {
-    // Apenas capturamos a posição. A detecção de movimento significativo ocorrerá no loop principal.
-    // Isso é importante porque e.clientX/Y são sempre atualizados, enquanto e.movementX/Y podem ser 0 se o mouse parou por 1 frame.
-    // console.log(`LIVE MOUSE: X:${e.clientX}, Y:${e.clientY}`); // DEBUG para ver posições absolutas
-    if (_lastMouseX === -1) { // Primeira leitura ou após reset
+    if (_lastMouseX === -1) {
+        _lastMouseX = e.clientX;
+        _lastMouseY = e.clientY;
+    } else {
+        const deltaX = e.clientX - _lastMouseX;
+        const deltaY = e.clientY - _lastMouseY;
+
+        if (Math.abs(deltaX) > MOUSE_POSITION_THRESHOLD || Math.abs(deltaY) > MOUSE_POSITION_THRESHOLD) {
+            _mouseMovedSignificantly = true;
+        }
         _lastMouseX = e.clientX;
         _lastMouseY = e.clientY;
     }
 });
 
+
 document.addEventListener('touchstart', (e) => {
     _touchCount = e.touches.length;
-    // e.preventDefault();
 }, { passive: false });
 
 document.addEventListener('touchend', (e) => { _touchCount = e.touches.length; });
@@ -139,7 +137,6 @@ if (window.DeviceMotionEvent) {
             _acceleration.x = e.accelerationIncludingGravity.x;
             _acceleration.y = e.accelerationIncludingGravity.y;
             _acceleration.z = e.accelerationIncludingGravity.z;
-            // console.log(`LIVE ACCEL: X:${_acceleration.x.toFixed(2)}, Y:${_acceleration.y.toFixed(2)}, Z:${_acceleration.z.toFixed(2)}`);
         }
     });
 }
@@ -199,7 +196,8 @@ function reiniciarJogo() {
         `Recorde: ${formatarTempo(recordeTempo)}`;
     tempoUltimaMudancaEstado = performance.now();
     tempoUltimoFrame = performance.now();
-    immunityEndTime = 0;
+    // A linha abaixo foi removida pois não haverá mais imunidade.
+    // immunityEndTime = 0;
     clearAllInputStates(); // Garante que todos os inputs estejam limpos ao voltar para o menu
 }
 
@@ -208,33 +206,16 @@ function atualizar() {
     const deltaTime = tempoAtual - tempoUltimoFrame;
     tempoUltimoFrame = tempoAtual;
 
-    // NOVO: Verificar movimento do mouse no início do frame para maior responsividade
-    // Isso garante que a detecção seja baseada na mudança de posição entre os quadros.
-    if (!isMobileDevice && _lastMouseX !== -1) { // Só faz sentido no desktop e se já temos uma posição inicial
-        // Obter a posição atual do mouse (pode ser necessário capturar mais frequentemente ou usar um evento diferente)
-        // Para este modelo, assumimos que o último e.clientX/Y está em _lastMouseX/Y
-        // mas vamos recalcular o movimento baseado na posição do ponteiro do navegador.
-        // O ideal seria pegar e.clientX/Y dentro de mousemove e não no loop de update
-        // Para o mouse, vamos confiar no último evento mousemove.
-        // A lógica de _mouseMovedSignificantly é atualizada pelo evento mousemove.
-
-        // Esta lógica abaixo agora está na função mousemove para maior precisão
-        // deltaX = ... deltaY = ...
-        // if (Math.abs(deltaX) > MOUSE_POSITION_THRESHOLD || Math.abs(deltaY) > MOUSE_POSITION_THRESHOLD) {
-        //     _mouseMovedSignificantly = true;
-        // }
-    }
-
-
     switch (estadoAtual) {
         case EstadosDoJogo.NaoIniciado:
             // O jogo inicia se QUALQUER input for detectado (teclado, mouse, touch)
             if (_anyKeyDown || _mouseButtonDown0 || _touchCount > 0) {
                 estadoAtual = EstadosDoJogo.EmProgresso;
                 tempoUltimaMudancaEstado = tempoAtual;
-                immunityEndTime = tempoAtual + initialImmunityPeriod;
+                // A linha abaixo foi removida pois não haverá mais imunidade.
+                // immunityEndTime = tempoAtual + initialImmunityPeriod;
                 clearAllInputStates(); // Limpa TODOS os inputs novamente, imediatamente após a transição
-                console.log("Jogo INICIADO. Imunidade até:", immunityEndTime.toFixed(0));
+                console.log("Jogo INICIADO. Sem período de imunidade.");
             }
             break;
 
@@ -242,7 +223,8 @@ function atualizar() {
             elementoTimer.innerHTML = `Você está fazendo ${textoNada} há\n${formatarTempo(tempoInatividade)}\n`;
             tempoInatividade += deltaTime;
 
-            if (getDidSomething()) { // getDidSomething() já verifica immunityEndTime
+            // getDidSomething() agora não verifica mais immunityEndTime
+            if (getDidSomething()) {
                 atualizarScores();
                 tempoUltimaMudancaEstado = tempoAtual;
                 estadoAtual = EstadosDoJogo.FimDeJogo;
@@ -269,7 +251,7 @@ function atualizar() {
     // Resetamos as flags de input de eventos DISCRETOS no final do frame.
     _anyKeyDown = false;
     _mouseButtonDown0 = false;
-    _mouseMovedSignificantly = false; // IMPORTANTE: Zeramos a flag aqui para o próximo frame
+    // _mouseMovedSignificantly NÃO é zerado aqui.
 }
 
 // --- Loop Principal do Jogo ---
